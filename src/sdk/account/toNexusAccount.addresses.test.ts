@@ -28,11 +28,10 @@ import {
 } from "../clients/createSmartAccountClient"
 import {
   BICONOMY_ATTESTER_ADDRESS,
-  BICONOMY_EXPERIMENTAL_ATTESTER,
   MEE_VALIDATOR_ADDRESS,
   NEXUS_ACCOUNT_FACTORY,
   RHINESTONE_ATTESTER_ADDRESS,
-  TEMP_MEE_ATTESTER_ADDR,
+  MOCK_ATTESTER_ADDRESS,
   TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
   TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
 } from "../constants"
@@ -169,7 +168,7 @@ describe("nexus.account.addresses", async () => {
       transport: http(),
       validatorAddress: MEE_VALIDATOR_ADDRESS,
       factoryAddress: NEXUS_ACCOUNT_FACTORY,
-      attesters: [TEMP_MEE_ATTESTER_ADDR, BICONOMY_EXPERIMENTAL_ATTESTER],
+      attesters: [RHINESTONE_ATTESTER_ADDRESS, MOCK_ATTESTER_ADDRESS, BICONOMY_ATTESTER_ADDRESS],
       useTestBundler: true
     })
 
