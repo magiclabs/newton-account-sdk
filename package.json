@@ -123,9 +123,6 @@
     "fund:nexus": "bun run ./scripts/fund:nexus.ts"
   },
   "sideEffects": false,
-  "simple-git-hooks": {
-    "pre-commit": "bun run format && bun run lint:fix"
-  },
   "type": "module",
   "types": "./dist/_types/index.d.ts",
   "typings": "./dist/_types/index.d.ts",
