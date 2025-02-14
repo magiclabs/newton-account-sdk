@@ -1,11 +1,10 @@
 import { type Hex, http, type Chain } from "viem"
 import type { Instruction } from "../clients/decorators/mee/getQuote"
 import {
-  BICONOMY_ATTESTER_ADDRESS,
-  MEE_VALIDATOR_ADDRESS,
+  NEWTON_ATTESTER_ADDRESS,
+  NEWTON_TESTNET_ATTESTER_ADDRESS,
   NEXUS_ACCOUNT_FACTORY,
-  RHINESTONE_ATTESTER_ADDRESS,
-  MOCK_ATTESTER_ADDRESS
+  MEE_VALIDATOR_ADDRESS
 } from "../constants"
 import type { ModularSmartAccount } from "../modules/utils/Types"
 import {
@@ -174,7 +173,7 @@ export async function toMultichainNexusAccount(
         transport: http(),
         validatorAddress: MEE_VALIDATOR_ADDRESS,
         factoryAddress: NEXUS_ACCOUNT_FACTORY,
-        attesters: [RHINESTONE_ATTESTER_ADDRESS, MOCK_ATTESTER_ADDRESS, BICONOMY_ATTESTER_ADDRESS],
+        attesters: [chain.testnet ? NEWTON_TESTNET_ATTESTER_ADDRESS : NEWTON_ATTESTER_ADDRESS],
         ...accountParameters
       })
     )
