@@ -1,6 +1,6 @@
 {
   "name": "@magicnewton/newton-account-sdk",
-  "version": "0.0.40",
+  "version": "0.0.42",
   "author": "MagicLabs",
   "repository": {
     "type": "git",
@@ -123,9 +123,6 @@
     "fund:nexus": "bun run ./scripts/fund:nexus.ts"
   },
   "sideEffects": false,
-  "simple-git-hooks": {
-    "pre-commit": "bun run format && bun run lint:fix"
-  },
   "type": "module",
   "types": "./dist/_types/index.d.ts",
   "typings": "./dist/_types/index.d.ts",

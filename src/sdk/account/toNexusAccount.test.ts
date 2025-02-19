@@ -44,7 +44,7 @@ import {
   createSmartAccountClient
 } from "../clients/createSmartAccountClient"
 import {
-  BICONOMY_ATTESTER_ADDRESS,
+  NEWTON_ATTESTER_ADDRESS,
   MAINNET_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
   TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
   TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
@@ -587,7 +587,7 @@ describe("nexus.account", async () => {
         ]
       })) as Address
 
-      expect(BICONOMY_ATTESTER_ADDRESS).toBe(biconomyAttesterAddress)
+      expect(NEWTON_ATTESTER_ADDRESS).toBe(biconomyAttesterAddress)
     }
   )
 })

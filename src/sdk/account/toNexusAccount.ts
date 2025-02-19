@@ -49,8 +49,8 @@ import {
   MAINNET_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
   NEXUS_BOOTSTRAP_ADDRESS,
   REGISTRY_ADDRESS,
-  RHINESTONE_ATTESTER_ADDRESS,
-  BICONOMY_ATTESTER_ADDRESS,
+  NEWTON_ATTESTER_ADDRESS,
+  NEWTON_TESTNET_ATTESTER_ADDRESS,
   MEE_VALIDATOR_ADDRESSES
 } from "../constants"
 // Constants
@@ -198,8 +198,7 @@ export const toNexusAccount = async (
     key = "nexus account",
     name = "Nexus Account",
     attesters: attesters_ = [
-      RHINESTONE_ATTESTER_ADDRESS,
-      BICONOMY_ATTESTER_ADDRESS
+      chain.testnet ? NEWTON_TESTNET_ATTESTER_ADDRESS : NEWTON_ATTESTER_ADDRESS
     ],
     attesterThreshold = 1,
     bootStrapAddress = NEXUS_BOOTSTRAP_ADDRESS,

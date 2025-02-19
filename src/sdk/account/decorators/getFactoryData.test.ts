@@ -8,10 +8,8 @@ import {
 } from "../../../test/testUtils"
 import type { MasterClient, NetworkConfig } from "../../../test/testUtils"
 import {
-  BICONOMY_ATTESTER_ADDRESS,
-  MEE_VALIDATOR_ADDRESS,
-  RHINESTONE_ATTESTER_ADDRESS,
-  MOCK_ATTESTER_ADDRESS
+  NEWTON_TESTNET_ATTESTER_ADDRESS,
+  MEE_VALIDATOR_ADDRESS
 } from "../../constants"
 import type { NexusAccount } from "../toNexusAccount"
 import { getK1FactoryData, getMeeFactoryData } from "./getFactoryData"
@@ -46,7 +44,7 @@ describe("nexus.account.getFactoryData", async () => {
     const factoryData = await getK1FactoryData({
       signerAddress: eoaAccount.address,
       index: 0n,
-      attesters: [RHINESTONE_ATTESTER_ADDRESS, BICONOMY_ATTESTER_ADDRESS],
+      attesters: [NEWTON_TESTNET_ATTESTER_ADDRESS],
       attesterThreshold: 1
     })
 
@@ -59,7 +57,7 @@ describe("nexus.account.getFactoryData", async () => {
     const factoryData = await getMeeFactoryData({
       signerAddress: eoaAccount.address,
       index: 0n,
-      attesters: [RHINESTONE_ATTESTER_ADDRESS, MOCK_ATTESTER_ADDRESS, BICONOMY_ATTESTER_ADDRESS],
+      attesters: [NEWTON_TESTNET_ATTESTER_ADDRESS],
       attesterThreshold: 1,
       validatorAddress: MEE_VALIDATOR_ADDRESS,
       publicClient: testClient as unknown as PublicClient,
