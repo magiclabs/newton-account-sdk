@@ -128,7 +128,9 @@ export type ToNexusSmartAccountParameters = {
   /** Optional account address override */
   accountAddress?: Address
   /** Optional list of attesters for the registry */
-  attester?: Address
+  attesters?: Address[]
+  /** Optional number of attesters required to approve module instalation */
+  threshold?: number
   /** Optional validator modules configuration */
   validators?: Array<Validator>
   /** Optional executor modules configuration */
@@ -257,9 +259,10 @@ export const toNexusAccount = async (
     key = "nexus account",
     name = "Nexus Account",
     registryAddress = REGISTRY_ADDRESS,
-    attester = chain.testnet
-      ? NEWTON_TESTNET_ATTESTER_ADDRESS
-      : NEWTON_ATTESTER_ADDRESS,
+    attesters = chain.testnet
+      ? [NEWTON_TESTNET_ATTESTER_ADDRESS]
+      : [NEWTON_ATTESTER_ADDRESS],
+    threshold = 1,
     validators: customValidators,
     executors: customExecutors,
     hook: customHook,
@@ -314,8 +317,8 @@ export const toNexusAccount = async (
 
   const registryConfig: RegistryConfig = {
     registry: registryAddress,
-    attesters: [attester],
-    threshold: 1
+    attesters,
+    threshold
   }
 
   const initData = getInitData({
