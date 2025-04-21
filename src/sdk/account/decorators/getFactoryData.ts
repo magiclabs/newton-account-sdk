@@ -10,7 +10,8 @@ import {
 import { NexusBootstrapAbi } from "../../constants/abi/NexusBootstrapAbi"
 import type {
   GenericModuleConfig,
-  PrevalidationHookModuleConfig
+  PrevalidationHookModuleConfig,
+  RegistryConfig
 } from "../toNexusAccount"
 
 export type GetFactoryDataParams = {
@@ -47,7 +48,7 @@ export type GetInitDataParams = {
   executors: GenericModuleConfig[]
   hook: GenericModuleConfig
   fallbacks: GenericModuleConfig[]
-  registryAddress: Address
+  registryConfig: RegistryConfig
   bootStrapAddress: Address
 }
 
@@ -61,14 +62,15 @@ export const getInitData = (params: GetInitDataParams): Hex =>
       params.bootStrapAddress,
       encodeFunctionData({
         abi: NexusBootstrapAbi,
-        functionName: "initNexusWithDefaultValidatorAndOtherModulesNoRegistry",
+        functionName: "initNexusWithDefaultValidatorAndOtherModules",
         args: [
           params.defaultValidator.data,
           params.validators,
           params.executors,
           params.hook,
           params.fallbacks,
-          params.prevalidationHooks
+          params.prevalidationHooks,
+          params.registryConfig
         ]
       })
     ]

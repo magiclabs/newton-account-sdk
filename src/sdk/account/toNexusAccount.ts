@@ -45,9 +45,12 @@ import {
 import type { MeeAuthorization } from "../clients/decorators/mee/getQuote"
 import {
   ENTRY_POINT_ADDRESS,
+  NEWTON_ATTESTER_ADDRESS,
+  NEWTON_TESTNET_ATTESTER_ADDRESS,
   NEXUS_ACCOUNT_FACTORY_ADDRESS,
   NEXUS_BOOTSTRAP_ADDRESS,
-  NEXUS_IMPLEMENTATION_ADDRESS
+  NEXUS_IMPLEMENTATION_ADDRESS,
+  REGISTRY_ADDRESS
 } from "../constants"
 // Constants
 import { EntrypointAbi } from "../constants/abi"
@@ -96,6 +99,12 @@ export type GenericModuleConfig<
   T extends MinimalModuleConfig = MinimalModuleConfig
 > = T
 
+export type RegistryConfig = {
+  registry: Address
+  attesters: Address[]
+  threshold: number
+}
+
 export type PrevalidationHookModuleConfig = GenericModuleConfig & {
   hookType: bigint
 }
@@ -118,6 +127,8 @@ export type ToNexusSmartAccountParameters = {
   index?: bigint | undefined
   /** Optional account address override */
   accountAddress?: Address
+  /** Optional list of attesters for the registry */
+  attester?: Address
   /** Optional validator modules configuration */
   validators?: Array<Validator>
   /** Optional executor modules configuration */
@@ -245,7 +256,10 @@ export const toNexusAccount = async (
     index = 0n,
     key = "nexus account",
     name = "Nexus Account",
-    registryAddress = zeroAddress,
+    registryAddress = REGISTRY_ADDRESS,
+    attester = chain.testnet
+      ? NEWTON_TESTNET_ATTESTER_ADDRESS
+      : NEWTON_ATTESTER_ADDRESS,
     validators: customValidators,
     executors: customExecutors,
     hook: customHook,
@@ -298,13 +312,19 @@ export const toNexusAccount = async (
   // Generate the initialization data for the account using the initNexus function
   const prevalidationHooks = customPrevalidationHooks || []
 
+  const registryConfig: RegistryConfig = {
+    registry: registryAddress,
+    attesters: [attester],
+    threshold: 1
+  }
+
   const initData = getInitData({
     defaultValidator: toInitData(defaultValidator),
     validators: validators.map(toInitData),
     executors: executors.map(toInitData),
     hook: toInitData(hook),
     fallbacks: fallbacks.map(toInitData),
-    registryAddress,
+    registryConfig,
     bootStrapAddress,
     prevalidationHooks
   })

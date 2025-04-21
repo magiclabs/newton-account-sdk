@@ -807,6 +807,23 @@ export const NexusBootstrapAbi = [
         internalType: "bytes"
       },
       {
+        name: "validators",
+        type: "tuple[]",
+        internalType: "struct BootstrapConfig[]",
+        components: [
+          {
+            name: "module",
+            type: "address",
+            internalType: "address"
+          },
+          {
+            name: "data",
+            type: "bytes",
+            internalType: "bytes"
+          }
+        ]
+      },
+      {
         name: "executors",
         type: "tuple[]",
         internalType: "struct BootstrapConfig[]",
