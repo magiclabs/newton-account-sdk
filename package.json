@@ -78,6 +78,11 @@
       "default": "./_cjs/modules/index.js"
     }
   },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
   "description": "SDK for Biconomy integration with support for account abstraction, smart accounts, ERC-4337.",
   "files": [
     "dist/*",
