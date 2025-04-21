@@ -11,7 +11,6 @@ import {
   decodeFunctionResult,
   encodeAbiParameters,
   encodeFunctionData,
-  encodePacked,
   erc20Abi,
   hexToBytes,
   keccak256,
@@ -266,7 +265,7 @@ export const getAccountMeta = async (
 
     if (domain !== "0x") {
       const decoded = decodeFunctionResult({
-        abi: [...EIP1271Abi],
+        abi: EIP1271Abi,
         functionName: "eip712Domain",
         data: domain
       })
@@ -341,21 +340,23 @@ export const getAccountDomainStructFields = async (
     functionName: "eip712Domain"
   })) as EIP712DomainReturn
 
-  const [fields, name, version, chainId, verifyingContract, salt, extensions] =
+  const [, name, version, chainId, verifyingContract, salt] =
     accountDomainStructFields
 
   const params = parseAbiParameters([
-    "bytes1, bytes32, bytes32, uint256, address, bytes32, bytes32"
+    "bytes32",
+    "bytes32",
+    "uint256",
+    "address",
+    "bytes32"
   ])
 
   return encodeAbiParameters(params, [
-    fields,
     keccak256(toBytes(name)),
     keccak256(toBytes(version)),
     chainId,
     verifyingContract,
-    salt,
-    keccak256(encodePacked(["uint256[]"], [extensions]))
+    salt
   ])
 }
 
@@ -415,20 +416,21 @@ export type EthersWallet = {
   signMessage: (...args: AnyData[]) => Promise<AnyData>
   signTypedData: (...args: AnyData[]) => Promise<AnyData>
   getAddress: () => Promise<AnyData>
-  address: Address | string
+  address: Address
   provider: AnyData
 }
 
 export const getAllowance = async (
   client: PublicClient,
-  accountAddress: Address,
-  tokenAddress: Address
+  owner: Address,
+  tokenAddress: Address,
+  grantee = BICONOMY_TOKEN_PAYMASTER
 ): Promise<bigint> => {
   const approval = await client.readContract({
     address: tokenAddress,
     abi: erc20Abi,
     functionName: "allowance",
-    args: [accountAddress, BICONOMY_TOKEN_PAYMASTER]
+    args: [owner, grantee]
   })
 
   return approval as bigint

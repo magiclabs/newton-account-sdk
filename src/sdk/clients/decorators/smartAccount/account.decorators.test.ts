@@ -1,7 +1,7 @@
+import { COUNTER_ADDRESS } from "@biconomy/ecosystem"
 import { http, type Account, type Address, type Chain, isHex } from "viem"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { CounterAbi } from "../../../../test/__contracts/abi"
-import { mockAddresses } from "../../../../test/__contracts/mockAddresses"
 import { toNetwork } from "../../../../test/testSetup"
 import {
   type MasterClient,
@@ -13,13 +13,13 @@ import {
   toTestClient
 } from "../../../../test/testUtils"
 import {
-  TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-} from "../../../constants"
+  type NexusAccount,
+  toNexusAccount
+} from "../../../account/toNexusAccount"
 import {
   type NexusClient,
   createSmartAccountClient
-} from "../../createSmartAccountClient"
+} from "../../createBicoBundlerClient"
 
 describe("account.decorators", async () => {
   let network: NetworkConfig
@@ -29,6 +29,7 @@ describe("account.decorators", async () => {
   // Test utils
   let testClient: MasterClient
   let eoaAccount: Account
+  let nexusAccount: NexusAccount
   let nexusClient: NexusClient
   let nexusAccountAddress: Address
   let recipient: Account
@@ -44,16 +45,18 @@ describe("account.decorators", async () => {
     recipientAddress = recipient.address
     testClient = toTestClient(chain, getTestAccount(5))
 
-    nexusClient = await createSmartAccountClient({
-      signer: eoaAccount,
+    nexusAccount = await toNexusAccount({
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      signer: eoaAccount,
+      transport: http()
     })
-    nexusAccountAddress = await nexusClient.account.getCounterFactualAddress()
+
+    nexusClient = createSmartAccountClient({
+      account: nexusAccount,
+      transport: http(bundlerUrl),
+      mock: true
+    })
+    nexusAccountAddress = await nexusClient.account.getAddress()
     await fundAndDeployClients(testClient, [nexusClient])
   })
 
@@ -68,7 +71,7 @@ describe("account.decorators", async () => {
   })
 
   test.concurrent("should currently fail to sign with typed data", async () => {
-    expect(
+    await expect(
       nexusClient.signTypedData({
         domain: {
           name: "Ether Mail",
@@ -105,6 +108,7 @@ describe("account.decorators", async () => {
 
   test("should send a user operation using sendTransaction", async () => {
     const balanceBefore = await getBalance(testClient, recipientAddress)
+
     const hash = await nexusClient.sendTransaction({
       calls: [
         {
@@ -123,21 +127,21 @@ describe("account.decorators", async () => {
     const counterValueBefore = await testClient.readContract({
       abi: CounterAbi,
       functionName: "getNumber",
-      address: mockAddresses.Counter
+      address: COUNTER_ADDRESS
     })
 
     expect(counterValueBefore).toBe(0n)
     const hash = await nexusClient.writeContract({
       abi: CounterAbi,
       functionName: "incrementNumber",
-      address: mockAddresses.Counter,
+      address: COUNTER_ADDRESS,
       chain
     })
     const { status } = await nexusClient.waitForTransactionReceipt({ hash })
     const counterValueAfter = await testClient.readContract({
       abi: CounterAbi,
       functionName: "getNumber",
-      address: mockAddresses.Counter
+      address: COUNTER_ADDRESS
     })
 
     expect(status).toBe("success")

@@ -2,39 +2,20 @@ import {
   http,
   type Address,
   type Chain,
-  Hex,
   type LocalAccount,
-  type PublicClient,
   type WalletClient,
-  createWalletClient,
-  isHex,
-  pad,
-  toHex
+  createWalletClient
 } from "viem"
-import { privateKeyToAccount } from "viem/accounts"
 import { base, baseSepolia } from "viem/chains"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { toNetwork } from "../../test/testSetup"
-import {
-  fundAndDeployClients,
-  getTestAccount,
-  killNetwork,
-  toTestClient
-} from "../../test/testUtils"
+import { getTestAccount, killNetwork, toTestClient } from "../../test/testUtils"
 import type { MasterClient, NetworkConfig } from "../../test/testUtils"
 import {
   type NexusClient,
   createSmartAccountClient
-} from "../clients/createSmartAccountClient"
-import {
-  MEE_VALIDATOR_ADDRESS,
-  NEXUS_ACCOUNT_FACTORY,
-  NEWTON_TESTNET_ATTESTER_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-} from "../constants"
+} from "../clients/createBicoBundlerClient"
 import { type NexusAccount, toNexusAccount } from "./toNexusAccount"
-import { getK1NexusAddress } from "./utils"
 
 describe("nexus.account.addresses", async () => {
   let network: NetworkConfig
@@ -65,69 +46,44 @@ describe("nexus.account.addresses", async () => {
       transport: http()
     })
 
-    nexusClient = await createSmartAccountClient({
-      signer: eoaAccount,
+    nexusAccount = await toNexusAccount({
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      signer: eoaAccount,
+      transport: http()
     })
 
-    nexusAccount = nexusClient.account
+    nexusClient = createSmartAccountClient({
+      account: nexusAccount,
+      transport: http(bundlerUrl),
+      mock: true
+    })
+
+    nexusAccountAddress = await nexusAccount.getAddress()
   })
   afterAll(async () => {
     await killNetwork([network?.rpcPort, network?.bundlerPort])
   })
 
-  test("should check account address", async () => {
-    nexusAccountAddress = await nexusClient.account.getCounterFactualAddress()
-    const counterfactualAddressFromHelper = await getK1NexusAddress({
-      publicClient: testClient as unknown as PublicClient,
-      signerAddress: eoaAccount.address,
-      index: 0n,
-      attesters: [NEWTON_TESTNET_ATTESTER_ADDRESS],
-      threshold: 1,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-    })
-    const gottenAddress = await nexusClient.account.getAddress()
-    expect(counterfactualAddressFromHelper).toBe(nexusAccountAddress)
-    expect(nexusAccount.address).toBe(nexusAccountAddress)
-    expect(nexusAccount.address).toBe(counterfactualAddressFromHelper)
-    expect(gottenAddress).toBe(nexusAccountAddress)
-  })
-
-  test("should check addresses after fund and deploy", async () => {
-    await fundAndDeployClients(testClient, [nexusClient])
-    const counterfactualAddressFromHelper = await getK1NexusAddress({
-      publicClient: testClient as unknown as PublicClient,
-      signerAddress: eoaAccount.address,
-      index: 0n,
-      attesters: [NEWTON_TESTNET_ATTESTER_ADDRESS],
-      threshold: 1,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-    })
-    const gottenAddress = await nexusClient.account.getAddress()
-    expect(counterfactualAddressFromHelper).toBe(nexusAccountAddress)
-    expect(nexusAccount.address).toBe(nexusAccountAddress)
-    expect(nexusAccount.address).toBe(counterfactualAddressFromHelper)
-    expect(gottenAddress).toBe(nexusAccountAddress)
-  })
-
   test("should override account address", async () => {
     const someoneElsesNexusAddress =
       "0xf0479e036343bC66dc49dd374aFAF98402D0Ae5f"
-    const newNexusClient = await createSmartAccountClient({
-      chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
+
+    const newNexusAccount = await toNexusAccount({
       accountAddress: someoneElsesNexusAddress,
-      signer: eoaAccount
+      chain,
+      signer: eoaAccount,
+      transport: http()
     })
+
+    const newNexusClient = createSmartAccountClient({
+      account: newNexusAccount,
+      transport: http(bundlerUrl),
+      mock: true
+    })
+
     const accountAddress = await newNexusClient.account.getAddress()
     const someoneElseCounterfactualAddress =
-      await newNexusClient.account.getCounterFactualAddress()
+      await newNexusClient.account.getAddress()
     expect(newNexusClient.account.address).toBe(
       someoneElseCounterfactualAddress
     )
@@ -135,46 +91,29 @@ describe("nexus.account.addresses", async () => {
   })
 
   test("should check that mainnet and testnet addresses are different", async () => {
-    const mainnetClient = await createSmartAccountClient({
-      signer: eoaAccount,
-      chain: base,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      useTestBundler: true
+    const mainnetClient = createSmartAccountClient({
+      account: await toNexusAccount({
+        chain: base,
+        signer: eoaAccount,
+        transport: http()
+      }),
+      mock: true,
+      transport: http(bundlerUrl)
     })
 
-    const testnetClient = await createSmartAccountClient({
-      signer: eoaAccount,
-      chain: baseSepolia,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      useTestBundler: true
+    const testnetClient = createSmartAccountClient({
+      account: await toNexusAccount({
+        chain: baseSepolia,
+        signer: eoaAccount,
+        transport: http()
+      }),
+      mock: true,
+      transport: http(bundlerUrl)
     })
 
     const testnetAddress = await testnetClient.account.getAddress()
     const mainnetAddress = await mainnetClient.account.getAddress()
 
     expect(testnetAddress).toBe(mainnetAddress)
-  })
-
-  test("should test a mee account", async () => {
-    const eoaAccount = privateKeyToAccount(`0x${process.env.PRIVATE_KEY}`)
-
-    const meeAccount = await toNexusAccount({
-      signer: eoaAccount,
-      chain: baseSepolia,
-      transport: http(),
-      validatorAddress: MEE_VALIDATOR_ADDRESS,
-      factoryAddress: NEXUS_ACCOUNT_FACTORY,
-      attesters: [NEWTON_TESTNET_ATTESTER_ADDRESS],
-      useTestBundler: true
-    })
-
-    const meeAddress = await meeAccount.getAddress()
-    const meeCounterfactualAddress = await meeAccount.getCounterFactualAddress()
-
-    expect(isHex(meeAddress)).toBe(true)
-    expect(isHex(meeCounterfactualAddress)).toBe(true)
-    expect(meeAddress).toBe(meeCounterfactualAddress)
   })
 })

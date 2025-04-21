@@ -1,5 +1,154 @@
 # @biconomy/abstractjs
 
+## 1.0.3
+
+### Patch Changes
+
+- 7702 support
+
+## 1.0.2
+
+### Patch Changes
+
+- Raw call data
+
+## 1.0.1
+
+### Patch Changes
+
+- - Added callData helper for composability
+  - Improved error reporting during tests
+  - Fix 6492 signature verification
+
+## 1.0.0
+
+### Minor Changes
+
+#### Breaking Changes
+
+- Added composability module by default resulting in a change of address for all users of latest SDK
+- Renamed `getDefaultFactoryData` to `getFactoryData` for more generic module support
+- Renamed `getDefaultNexusAddress` to `getlNexusAccount` to reflect universal module initialization
+- Updated module initialization structure to support any validator type extending BaseModule
+- Changed module configuration format to require explicit type declarations
+
+#### Features
+
+- Added universal module initialization support for Nexus accounts
+- Same account for both mee and 4337 flows
+- Introduced flexible module configuration system allowing extended properties
+- Added support for custom bootstrap addresses during account initialization
+- Implemented smart session helpers for improved session management
+- Added new utility functions `toInitData` and `toInstallData` for standardized module formatting
+- Added composability module for multi-transaction batching in a single userOp
+- Added support for Nexus v1.2.0 with improved composability features
+- Added custom gas limits for composability calls
+- Added EIP-6492 compatibility for account signatures
+- Integrated userOp status reporting and receipt tracking
+
+#### Improvements
+
+- Enable mode for smart sessions by default
+- Streamlined factory data and counterfactual address calculations
+- Enhanced type safety for module configurations
+- Improved error handling for module initialization
+- Reduced bundle size through code optimization (-5.45% ESM, -7.42% CJS)
+- Added comprehensive test coverage for new module initialization flows
+- Improved status reporting for userOps
+- Fixed initCode computation for accurate counterfactual address generation
+- Enhanced batch builder with better composability checks
+
+## 0.3.0
+
+### Minor Changes
+
+- Change attester address for Mee users. Results in change in MEE users' addresses
+
+## 0.2.1
+
+### Patch Changes
+
+- Added an additional configuration to version config to cater for accounts < 0.0.34
+- Added an upgradeSmartAccount decorator to the smart account client
+- Added a new test for the upgradeSmartAccount decorator
+
+## 0.2.0
+
+### Minor Changes
+
+- Update K1_VALIDATOR_FACTORY_ADDRESS address, resulting in changed default addresses for users
+
+## 0.1.1
+
+### Patch Changes
+
+- Added GasBuffer option to increase gasValues returned from the bundler prior to sending the userOp
+
+## 0.1.0
+
+### Minor Changes
+
+- Update BICONOMY_ATTESTER address, resulting in changed default addresses for users
+
+## 0.0.41
+
+### Patch Changes
+
+- Improved batching logic
+- Added mcWeth
+- Fixed getAccountMeta helper
+- Fixed EIP712Sign logic after EIP 7779 changes
+- Added tests for installing & uninstalling smart sessions
+
+## 0.0.40
+
+### Patch Changes
+
+- Fixed mee signer issues with metamask
+- Added export for UniswapSwapRouterAbi
+- Introduced optimistic mode parameter for across relayer
+- Made interfacing with multichain contracts consitent while building instructions
+- Added getSupertransactionReceipt helper
+- Added buildBatch instruction helper
+
+## 0.0.39
+
+### Patch Changes
+
+- Nexus init using custom validator
+  - BREAKING: `getMeeFactoryData` helper now renamed to `getDefaultFactoryData`
+  - BREAKING: `getMeeNexusAddress` helper now renamed to `getNexusAddress`
+- Moved useTestBundler datapoint to the bundler client instead of the account & renamed to 'mock'.
+- Use pimlico gasEstimates if string 'pimlico' is in the bundlerUrl
+- Added confirmations: 2 to waitForUserOperationReceipt in signOnChainQuote helper to avoid race condition
+- Changed threshold :bigint to :number in getOwnableValidator helper
+
+## 0.0.38
+
+### Patch Changes
+
+- Added Fusion support
+  - BREAKING: `createSmartAccountClient` now requires an explicit account instance instead of account parameters
+  - BREAKING: Removed `executeSignedFusionQuote` helper
+  - BREAKING: `toMultichainNexusAccount` now requires an explicit `transports` parameter, to encourate the use of paid RPCs
+  - Made `createSmartAccountClient` an alias of `createBicoBundlerClient`
+  - Added / modified MEE client methods:
+    - getFusionQuote
+    - executeFusionQuote
+    - signFusionQuote
+  - Additional transaction types:
+    - Transfer
+    - TransferFrom
+    - Approve
+    - Withdrawal
+
+## 0.0.37
+
+### Patch Changes
+
+- MeeNode info validation
+- Ownables fix for moduleInitArgs
+
 ## 0.0.36
 
 ### Patch Changes
@@ -48,7 +197,7 @@
 
 - AbstractJS rebrand
 - meeNode support
-- useTestBundler
+- mock
 
 ## 0.0.28
 

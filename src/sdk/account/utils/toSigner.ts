@@ -19,7 +19,12 @@ import { getAction } from "viem/utils"
 import type { AnyData } from "../../modules/utils/Types"
 import type { EthersWallet } from "./Utils"
 
-export type EthereumProvider = { request(...args: AnyData): Promise<AnyData> }
+export interface BaseProvider {
+  request(...args: AnyData): Promise<AnyData>
+}
+// Generic type that extends the base provider
+export type EthereumProvider<T extends BaseProvider = BaseProvider> = T &
+  BaseProvider
 
 /** Represents a local account that can sign transactions and messages */
 export type Signer = LocalAccount
@@ -51,6 +56,10 @@ export async function toSigner<
   >
   address?: Address
 }): Promise<LocalAccount> {
+  if (!signer) {
+    throw new Error("Signer is required")
+  }
+
   if ("provider" in signer) {
     const wallet = signer as EthersWallet
     const address = await wallet.getAddress()
@@ -98,6 +107,7 @@ export async function toSigner<
         })
       }
     }
+
     if (!address) {
       // For TS to be happy
       throw new Error("address is required")
@@ -112,7 +122,7 @@ export async function toSigner<
     walletClient = signer as WalletClient<Transport, Chain | undefined, Account>
   }
 
-  const addressFromWalletClient =
+  const addressFromWalletClient: Hex =
     walletClient?.account?.address ?? (await walletClient?.getAddresses())?.[0]
 
   if (!addressFromWalletClient) {

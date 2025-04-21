@@ -1,6 +1,7 @@
-import type { Chain, LocalAccount } from "viem"
+import type { Chain, LocalAccount, Transport } from "viem"
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 import { beforeAll, describe, expect, it } from "vitest"
-import { getTestChains, toNetwork } from "../../../../test/testSetup"
+import { getTestChainConfig, toNetwork } from "../../../../test/testSetup"
 import type { NetworkConfig } from "../../../../test/testUtils"
 import {
   type MeeClient,
@@ -14,42 +15,65 @@ import {
 } from "../../toMultiChainNexusAccount"
 import buildIntent from "./buildIntent"
 
-describe("mee:buildIntent", () => {
+describe("mee.buildIntent", () => {
   let network: NetworkConfig
   let eoaAccount: LocalAccount
 
   let mcNexus: MultichainSmartAccount
   let meeClient: MeeClient
 
-  let targetChain: Chain
   let paymentChain: Chain
+  let targetChain: Chain
+  let transports: Transport[]
 
   beforeAll(async () => {
     network = await toNetwork("MAINNET_FROM_ENV_VARS")
-    ;[paymentChain, targetChain] = getTestChains(network)
+    ;[[paymentChain, targetChain], transports] = getTestChainConfig(network)
 
     eoaAccount = network.account!
 
     mcNexus = await toMultichainNexusAccount({
       chains: [paymentChain, targetChain],
+      transports,
       signer: eoaAccount
     })
 
-    meeClient = createMeeClient({ account: mcNexus })
+    meeClient = await createMeeClient({ account: mcNexus })
   })
 
-  it("should call the bridge with a unified balance", async () => {
+  it("should highlight building intent instructions", async () => {
+    console.log("mcNexus", mcNexus.addressOn(targetChain.id))
+
     const instructions: Instruction[] = await buildIntent(
       { account: mcNexus },
       {
-        amount: 100n,
+        amount: 1000000n,
         mcToken: mcUSDC,
         toChain: targetChain
       }
     )
 
-    expect([0, 1]).toContain(instructions.length)
-    if (instructions.length === 0) return
-    expect(instructions[0].calls).toHaveLength(2)
+    expect([1, 0]).toContain(instructions.length)
+  })
+
+  it("should highlight building optimistic intent instructions", async () => {
+    const newMcNexus = await toMultichainNexusAccount({
+      chains: [paymentChain, targetChain],
+      transports,
+      signer: privateKeyToAccount(generatePrivateKey())
+    })
+
+    const instructions: Instruction[] = await buildIntent(
+      { account: newMcNexus },
+      {
+        amount: 1000000n,
+        mcToken: mcUSDC,
+        toChain: paymentChain,
+        mode: "OPTIMISTIC"
+      }
+    )
+
+    expect(instructions.length).toBe(1)
+    expect(instructions[0].calls.length).toBe(2)
   })
 })

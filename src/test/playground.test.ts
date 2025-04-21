@@ -8,36 +8,28 @@ import {
   type WalletClient,
   createPublicClient,
   createWalletClient,
-  encodeFunctionData,
   parseEther
 } from "viem"
-import { PaymasterClient } from "viem/account-abstraction"
+import { privateKeyToAccount } from "viem/accounts"
+import { base, optimism, polygon } from "viem/chains"
 import { beforeAll, describe, expect, test } from "vitest"
+import { toMultichainNexusAccount } from "../sdk/account"
+import { toNexusAccount } from "../sdk/account/toNexusAccount"
 import { playgroundTrue } from "../sdk/account/utils/Utils"
-import {
-  type BicoPaymasterClient,
-  type PaymasterContext,
-  biconomySponsoredPaymasterContext,
-  createBicoPaymasterClient
-} from "../sdk/clients/createBicoPaymasterClient"
 import {
   type NexusClient,
   createSmartAccountClient
-} from "../sdk/clients/createSmartAccountClient"
-import { SmartSessionMode } from "../sdk/constants"
-import type {
-  CreateSessionDataParams,
-  SessionData
-} from "../sdk/modules/smartSessionsValidator/Types"
+} from "../sdk/clients/createBicoBundlerClient"
 import {
-  smartSessionCreateActions,
-  smartSessionUseActions
-} from "../sdk/modules/smartSessionsValidator/decorators"
-import { toSmartSessionsValidator } from "../sdk/modules/smartSessionsValidator/toSmartSessionsValidator"
-import { CounterAbi } from "./__contracts/abi/CounterAbi"
-import { testAddresses } from "./callDatas"
+  type BicoPaymasterClient,
+  type BiconomyPaymasterContext,
+  biconomySponsoredPaymasterContext,
+  createBicoPaymasterClient
+} from "../sdk/clients/createBicoPaymasterClient"
 import { toNetwork } from "./testSetup"
 import type { NetworkConfig } from "./testUtils"
+
+const index = 0n
 
 describe.skipIf(!playgroundTrue())("playground", () => {
   let network: NetworkConfig
@@ -58,7 +50,7 @@ describe.skipIf(!playgroundTrue())("playground", () => {
     | undefined
     | {
         paymaster: BicoPaymasterClient
-        paymasterContext: PaymasterContext
+        paymasterContext: BiconomyPaymasterContext
       }
 
   beforeAll(async () => {
@@ -69,7 +61,7 @@ describe.skipIf(!playgroundTrue())("playground", () => {
     paymasterUrl = network.paymasterUrl
     eoaAccount = network.account as PrivateKeyAccount
 
-    recipientAddress = eoaAccount.address
+    recipientAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 
     walletClient = createWalletClient({
       account: eoaAccount,
@@ -93,17 +85,20 @@ describe.skipIf(!playgroundTrue())("playground", () => {
   })
 
   test("should init the smart account", async () => {
-    nexusClient = await createSmartAccountClient({
-      signer: eoaAccount,
-      chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
+    nexusClient = createSmartAccountClient({
+      account: await toNexusAccount({
+        chain,
+        signer: eoaAccount,
+        transport: http(),
+        index
+      }),
+      transport: http(bundlerUrl),
       ...(paymasterParams ? paymasterParams : {})
     })
   })
 
   test("should log relevant addresses", async () => {
-    nexusAccountAddress = await nexusClient.account.getCounterFactualAddress()
+    nexusAccountAddress = await nexusClient.account.getAddress()
     console.log({ nexusAccountAddress })
   })
 
@@ -116,8 +111,6 @@ describe.skipIf(!playgroundTrue())("playground", () => {
         address: nexusAccountAddress
       })
     ])
-
-    console.log({ ownerBalance, smartAccountBalance })
 
     const balancesAreOfCorrectType = [ownerBalance, smartAccountBalance].every(
       (balance) => typeof balance === "bigint"
@@ -132,12 +125,8 @@ describe.skipIf(!playgroundTrue())("playground", () => {
       const receipt = await publicClient.waitForTransactionReceipt({ hash })
       expect(receipt.status).toBe("success")
       const [ownerBalanceTwo, smartAccountBalanceTwo] = await Promise.all([
-        publicClient.getBalance({
-          address: eoaAccount.address
-        }),
-        publicClient.getBalance({
-          address: nexusAccountAddress
-        })
+        publicClient.getBalance({ address: eoaAccount.address }),
+        publicClient.getBalance({ address: nexusAccountAddress })
       ])
       console.log({ ownerBalanceTwo, smartAccountBalanceTwo })
     }
@@ -148,23 +137,18 @@ describe.skipIf(!playgroundTrue())("playground", () => {
     const balanceBefore = await publicClient.getBalance({
       address: recipientAddress
     })
-    const hash = await nexusClient.sendTransaction({
-      calls: [
-        {
-          to: recipientAddress,
-          value: 1n
-        }
-      ]
+    const hash = await nexusClient.sendUserOperation({
+      calls: [{ to: recipientAddress, value: 1n }]
     })
-    const { status } = await publicClient.waitForTransactionReceipt({ hash })
+    const { success } = await nexusClient.waitForUserOperationReceipt({ hash })
     const balanceAfter = await publicClient.getBalance({
       address: recipientAddress
     })
-    expect(status).toBe("success")
+    expect(success).toBe("true")
     expect(balanceAfter - balanceBefore).toBe(1n)
   })
 
-  test("should send a user operation using nexusClient.sendUserOperation", async () => {
+  test.skip("should send a user operation using nexusClient.sendUserOperation", async () => {
     const balanceBefore = await publicClient.getBalance({
       address: recipientAddress
     })
@@ -179,110 +163,5 @@ describe.skipIf(!playgroundTrue())("playground", () => {
     })
     expect(success).toBe("true")
     expect(balanceAfter - balanceBefore).toBe(1n)
-  })
-
-  test("should test creating and using a session", async () => {
-    const sessionsModule = toSmartSessionsValidator({
-      account: nexusClient.account,
-      signer: eoaAccount
-    })
-
-    const isInstalledBefore = await nexusClient.isModuleInstalled({
-      module: sessionsModule
-    })
-
-    if (!isInstalledBefore) {
-      const hash = await nexusClient.installModule({
-        module: sessionsModule.moduleInitData
-      })
-
-      const { success: installSuccess } =
-        await nexusClient.waitForUserOperationReceipt({ hash })
-      expect(installSuccess).toBe("true")
-    }
-
-    const isInstalledAfter = await nexusClient.isModuleInstalled({
-      module: sessionsModule
-    })
-    expect(isInstalledAfter).toBe(true)
-
-    const sessionRequestedInfo: CreateSessionDataParams[] = [
-      {
-        sessionPublicKey: eoaAccount.address, // session key signer
-        actionPoliciesInfo: [
-          {
-            contractAddress: testAddresses.Counter, // counter address
-            functionSelector: "0x273ea3e3" as Hex // function selector for increment count
-          }
-        ]
-      }
-    ]
-
-    const nexusSessionClient = nexusClient.extend(
-      smartSessionCreateActions(sessionsModule)
-    )
-
-    const createSessionsResponse = await nexusSessionClient.grantPermission({
-      sessionRequestedInfo
-    })
-
-    expect(createSessionsResponse.userOpHash).toBeDefined()
-    expect(createSessionsResponse.permissionIds).toBeDefined()
-
-    const receiptTwo = await nexusClient.waitForUserOperationReceipt({
-      hash: createSessionsResponse.userOpHash
-    })
-
-    expect(receiptTwo.success).toBe("true")
-
-    const sessionData: SessionData = {
-      granter: nexusClient.account.address,
-      sessionPublicKey: eoaAccount.address,
-      moduleData: {
-        permissionIds: createSessionsResponse.permissionIds,
-        action: createSessionsResponse.action,
-        mode: SmartSessionMode.USE,
-        sessions: createSessionsResponse.sessions
-      }
-    }
-
-    const smartSessionNexusClient = await createSmartAccountClient({
-      chain,
-      accountAddress: nexusClient.account.address,
-      signer: eoaAccount,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      ...(paymasterParams ? paymasterParams : {})
-    })
-
-    const usePermissionsModule = toSmartSessionsValidator({
-      account: smartSessionNexusClient.account,
-      signer: eoaAccount,
-      moduleData: sessionData.moduleData
-    })
-
-    const useSmartSessionNexusClient = smartSessionNexusClient.extend(
-      smartSessionUseActions(usePermissionsModule)
-    )
-
-    const userOpHash = await useSmartSessionNexusClient.usePermission({
-      calls: [
-        {
-          to: testAddresses.Counter,
-          data: encodeFunctionData({
-            abi: CounterAbi,
-            functionName: "incrementNumber"
-          })
-        }
-      ]
-    })
-
-    expect(userOpHash).toBeDefined()
-    const receiptThree =
-      await useSmartSessionNexusClient.waitForUserOperationReceipt({
-        hash: userOpHash
-      })
-
-    expect(receiptThree.success).toBe("true")
   })
 })
