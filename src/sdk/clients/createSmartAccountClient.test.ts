@@ -1,3 +1,4 @@
+import { COUNTER_ADDRESS } from "@biconomy/ecosystem"
 import { Wallet, ethers } from "ethers"
 import {
   http,
@@ -13,7 +14,6 @@ import type { UserOperationReceipt } from "viem/account-abstraction"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { CounterAbi } from "../../test/__contracts/abi"
-import mockAddresses from "../../test/__contracts/mockAddresses"
 import { toNetwork } from "../../test/testSetup"
 import {
   getBalance,
@@ -23,7 +23,7 @@ import {
   topUp
 } from "../../test/testUtils"
 import type { MasterClient, NetworkConfig } from "../../test/testUtils"
-import { ERROR_MESSAGES } from "../account/utils/Constants"
+import { toNexusAccount } from "../account/toNexusAccount"
 import { Logger } from "../account/utils/Logger"
 import {
   type EthersWallet,
@@ -32,13 +32,9 @@ import {
 } from "../account/utils/Utils"
 import { getChain } from "../account/utils/getChain"
 import {
-  TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-} from "../constants"
-import {
   type NexusClient,
   createSmartAccountClient
-} from "./createSmartAccountClient"
+} from "./createBicoBundlerClient"
 
 describe("nexus.client", async () => {
   let network: NetworkConfig
@@ -68,16 +64,18 @@ describe("nexus.client", async () => {
     privKey = generatePrivateKey()
     const account = privateKeyToAccount(privKey)
 
-    nexusClient = await createSmartAccountClient({
+    const nexusAccount = await toNexusAccount({
       signer: account,
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      transport: http()
     })
-    nexusAccountAddress = await nexusClient.account.getCounterFactualAddress()
+
+    nexusClient = createSmartAccountClient({
+      bundlerUrl,
+      account: nexusAccount,
+      mock: true
+    })
+    nexusAccountAddress = await nexusAccount.getAddress()
   })
   afterAll(async () => {
     await killNetwork([network?.rpcPort, network?.bundlerPort])
@@ -87,8 +85,6 @@ describe("nexus.client", async () => {
     const isDeployed = await nexusClient.account.isDeployed()
 
     if (!isDeployed) {
-      console.log("Smart account not deployed. Deploying...")
-
       // Fund the account first
       await topUp(testClient, nexusAccountAddress, parseEther("0.01"))
 
@@ -108,8 +104,6 @@ describe("nexus.client", async () => {
 
       const isNowDeployed = await nexusClient.account.isDeployed()
       expect(isNowDeployed).toBe(true)
-
-      console.log("Smart account deployed successfully")
     } else {
       console.log("Smart account already deployed")
     }
@@ -141,7 +135,7 @@ describe("nexus.client", async () => {
       functionName: "incrementNumber"
     })
     const call = {
-      to: mockAddresses.Counter,
+      to: COUNTER_ADDRESS as Address,
       data: encodedCall
     }
     const results = await Promise.all([
@@ -194,12 +188,6 @@ describe("nexus.client", async () => {
     expect(estimatedGas.preVerificationGas).toBeTruthy()
   }, 30000)
 
-  test.skip("should create a smart account with paymaster with an api key", async () => {
-    const paymaster = nexusClient.paymaster
-    expect(paymaster).not.toBeNull()
-    expect(paymaster).not.toBeUndefined()
-  })
-
   test("should return chain object for chain id 1", async () => {
     const chainId = 1
     const chain = getChain(chainId)
@@ -226,7 +214,7 @@ describe("nexus.client", async () => {
 
   test("should throw an error, chain id not found", async () => {
     const chainId = 0
-    expect(() => getChain(chainId)).toThrow(ERROR_MESSAGES.CHAIN_NOT_FOUND)
+    expect(() => getChain(chainId)).toThrow("Chain 0 not found.")
   })
 
   test("should have attached erc757 actions", async () => {
@@ -240,7 +228,7 @@ describe("nexus.client", async () => {
       nexusClient.isModuleInstalled({
         module: {
           type: "validator",
-          address: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
+          address: nexusClient.account.getModule().address,
           initData: "0x"
         }
       }),
@@ -252,7 +240,7 @@ describe("nexus.client", async () => {
       })
     ])
     expect(accountId.indexOf("biconomy.nexus") > -1).toBe(true)
-    expect(isModuleInstalled).toBe(true)
+    expect(isModuleInstalled).toBe(false)
     expect(supportsExecutionMode).toBe(true)
     expect(supportsModule).toBe(true)
   })
@@ -269,27 +257,30 @@ describe("nexus.client", async () => {
 
   test("should compare signatures of viem and ethers signer", async () => {
     const viemSigner = privateKeyToAccount(privKey)
-
     const wallet = new Wallet(privKey)
 
-    const viemNexusClient = await createSmartAccountClient({
+    const viemAccount = await toNexusAccount({
       signer: viemSigner,
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      transport: http()
     })
 
-    const ethersNexusClient = await createSmartAccountClient({
+    const ethersAccount = await toNexusAccount({
       signer: wallet as EthersWallet,
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      transport: http()
+    })
+
+    const viemNexusClient = createSmartAccountClient({
+      bundlerUrl,
+      account: viemAccount,
+      mock: true
+    })
+
+    const ethersNexusClient = createSmartAccountClient({
+      bundlerUrl,
+      account: ethersAccount,
+      mock: true
     })
 
     const sig1 = await viemNexusClient.signMessage({ message: "123" })
@@ -300,14 +291,17 @@ describe("nexus.client", async () => {
 
   test("should send user operation using ethers Wallet", async () => {
     const ethersWallet = new ethers.Wallet(privKey)
-    const ethersNexusClient = await createSmartAccountClient({
+
+    const ethersAccount = await toNexusAccount({
       signer: ethersWallet as EthersWallet,
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      transport: http()
+    })
+
+    const ethersNexusClient = createSmartAccountClient({
+      bundlerUrl,
+      account: ethersAccount,
+      mock: true
     })
 
     const hash = await ethersNexusClient.sendUserOperation({

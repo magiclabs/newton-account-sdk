@@ -1,3 +1,7 @@
+import {
+  MOCK_SIGNATURE_VALIDATOR,
+  TOKEN_WITH_PERMIT
+} from "@biconomy/ecosystem"
 import { getAddress, getBytes, hexlify } from "ethers"
 import {
   http,
@@ -9,11 +13,9 @@ import {
   type WalletClient,
   concat,
   concatHex,
-  createPublicClient,
   createWalletClient,
   domainSeparator,
   encodeAbiParameters,
-  encodeFunctionData,
   encodePacked,
   getContract,
   hashMessage,
@@ -29,9 +31,7 @@ import {
 import type { UserOperation } from "viem/account-abstraction"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { MockSignatureValidatorAbi } from "../../test/__contracts/abi/MockSignatureValidatorAbi"
-import { TokenWithPermitAbi } from "../../test/__contracts/abi/TokenWithPermitAbi"
-import { testAddresses } from "../../test/callDatas"
-import { testnetTest, toNetwork } from "../../test/testSetup"
+import { toNetwork } from "../../test/testSetup"
 import {
   fundAndDeployClients,
   getTestAccount,
@@ -42,21 +42,18 @@ import type { MasterClient, NetworkConfig } from "../../test/testUtils"
 import {
   type NexusClient,
   createSmartAccountClient
-} from "../clients/createSmartAccountClient"
-import {
-  NEWTON_ATTESTER_ADDRESS,
-  MAINNET_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-  TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS
-} from "../constants"
-import type { NexusAccount } from "./toNexusAccount"
+} from "../clients/createBicoBundlerClient"
+import { TokenWithPermitAbi } from "../constants/abi/TokenWithPermitAbi"
+import { type NexusAccount, toNexusAccount } from "./toNexusAccount"
 import {
   addressEquals,
   getAccountDomainStructFields,
   getAccountMeta
 } from "./utils"
 import {
+  NEXUS_DOMAIN_NAME,
   NEXUS_DOMAIN_TYPEHASH,
+  NEXUS_DOMAIN_VERSION,
   PARENT_TYPEHASH,
   eip1271MagicValue
 } from "./utils/Constants"
@@ -83,6 +80,7 @@ describe("nexus.account", async () => {
     bundlerUrl = network.bundlerUrl
     eoaAccount = getTestAccount(0)
     userTwo = getTestAccount(1)
+
     testClient = toTestClient(chain, getTestAccount(5))
 
     walletClient = createWalletClient({
@@ -91,27 +89,81 @@ describe("nexus.account", async () => {
       transport: http()
     })
 
-    nexusClient = await createSmartAccountClient({
-      signer: eoaAccount,
+    nexusAccount = await toNexusAccount({
       chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
-      validatorAddress: TEST_ADDRESS_K1_VALIDATOR_ADDRESS,
-      factoryAddress: TEST_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-      useTestBundler: true
+      signer: eoaAccount,
+      transport: http()
+    })
+
+    nexusClient = createSmartAccountClient({
+      mock: true,
+      account: nexusAccount,
+      transport: http(bundlerUrl)
     })
 
     nexusAccount = nexusClient.account
-    nexusAccountAddress = await nexusClient.account.getCounterFactualAddress()
+    nexusAccountAddress = await nexusClient.account.getAddress()
     await fundAndDeployClients(testClient, [nexusClient])
   })
   afterAll(async () => {
     await killNetwork([network?.rpcPort, network?.bundlerPort])
   })
 
+  test("should check isValidSignature using EIP-6492", async () => {
+    const undeployedAccount = await toNexusAccount({
+      chain,
+      signer: eoaAccount,
+      transport: http(),
+      index: 102n // undeployed
+    })
+
+    const message = "0x1234"
+
+    const undeployedAccountAddress = await undeployedAccount.getAddress()
+    expect(await undeployedAccount.isDeployed()).toBe(false)
+    const data = hashMessage(message)
+
+    // Calculate the domain separator
+    const domainSeparator = keccak256(
+      encodeAbiParameters(
+        parseAbiParameters("bytes32, bytes32, bytes32, uint256, address"),
+        [
+          keccak256(toBytes(NEXUS_DOMAIN_TYPEHASH)),
+          keccak256(toBytes(NEXUS_DOMAIN_NAME)),
+          keccak256(toBytes(NEXUS_DOMAIN_VERSION)),
+          BigInt(chain.id),
+          undeployedAccountAddress
+        ]
+      )
+    )
+
+    // Calculate the parent struct hash
+    const parentStructHash = keccak256(
+      encodeAbiParameters(parseAbiParameters("bytes32, bytes32"), [
+        keccak256(toBytes("PersonalSign(bytes prefixed)")),
+        data
+      ])
+    )
+
+    // Calculate the final hash
+    const resultHash: Hex = keccak256(
+      concat(["0x1901", domainSeparator, parentStructHash])
+    )
+    const signature = await undeployedAccount.signMessage({
+      message: { raw: toBytes(resultHash) }
+    })
+
+    const viemResponse = await testClient.verifyMessage({
+      address: undeployedAccountAddress,
+      message,
+      signature
+    })
+
+    expect(viemResponse).toBe(true)
+  })
+
   test("should check isValidSignature PersonalSign is valid", async () => {
     const meta = await getAccountMeta(testClient, nexusAccountAddress)
-
     const data = hashMessage("0x1234")
 
     // Calculate the domain separator
@@ -128,7 +180,6 @@ describe("nexus.account", async () => {
       )
     )
 
-    // Calculate the parent struct hash
     const parentStructHash = keccak256(
       encodeAbiParameters(parseAbiParameters("bytes32, bytes32"), [
         keccak256(toBytes("PersonalSign(bytes prefixed)")),
@@ -166,7 +217,7 @@ describe("nexus.account", async () => {
 
   test("should verify signatures", async () => {
     const mockSigVerifierContract = getContract({
-      address: testAddresses.MockSignatureValidator,
+      address: MOCK_SIGNATURE_VALIDATOR as Address,
       abi: MockSignatureValidatorAbi,
       client: testClient
     })
@@ -180,9 +231,7 @@ describe("nexus.account", async () => {
     })
 
     // Sign with Ethereum signed message
-    const ethSignature = await eoaAccount.signMessage({
-      message
-    })
+    const ethSignature = await eoaAccount.signMessage({ message })
 
     const isValidRegular = await mockSigVerifierContract.read.verify([
       messageHash,
@@ -202,28 +251,6 @@ describe("nexus.account", async () => {
     expect(isValidEthSigned).toBe(true)
   })
 
-  test.skip("should verify signatures from prepared UserOperation", async () => {
-    const mockSigVerifierContract = getContract({
-      address: testAddresses.MockSignatureValidator,
-      abi: MockSignatureValidatorAbi,
-      client: testClient
-    })
-
-    const userOperation = await nexusClient.prepareUserOperation({
-      calls: [{ to: userTwo.address, value: 1n }]
-    })
-
-    const userOpHash = nexusClient.account.getUserOpHash(userOperation)
-
-    const isValid = await mockSigVerifierContract.read.verify([
-      userOpHash,
-      userOperation.signature,
-      eoaAccount.address
-    ])
-
-    expect(isValid).toBe(true)
-  })
-
   test("should have 4337 account actions", async () => {
     const [
       isDeployed,
@@ -240,7 +267,7 @@ describe("nexus.account", async () => {
       entryPointVersion
     ] = await Promise.all([
       nexusAccount.isDeployed(),
-      nexusAccount.getCounterFactualAddress(),
+      nexusAccount.getAddress(),
       nexusAccount.getUserOpHash({
         sender: eoaAccount.address,
         nonce: 0n,
@@ -290,18 +317,27 @@ describe("nexus.account", async () => {
     expect(entryPointVersion).toBe("0.7")
   })
 
-  test.skip("should test isValidSignature EIP712Sign to be valid with viem", async () => {
+  test("should test isValidSignature EIP712Sign to be valid with viem", async () => {
+    const nexusAccountAddress = await nexusAccount.getAddress()
+
     const message = {
       contents: keccak256(toBytes("test", { size: 32 }))
     }
+    const meta = await getAccountMeta(testClient, nexusAccountAddress)
 
-    const domainSeparator = await testClient.readContract({
-      address: await nexusAccount.getAddress(),
-      abi: parseAbi([
-        "function DOMAIN_SEPARATOR() external view returns (bytes32)"
-      ]),
-      functionName: "DOMAIN_SEPARATOR"
-    })
+    // Calculate the domain separator
+    const domainSeparator = keccak256(
+      encodeAbiParameters(
+        parseAbiParameters("bytes32, bytes32, bytes32, uint256, address"),
+        [
+          keccak256(toBytes(NEXUS_DOMAIN_TYPEHASH)),
+          keccak256(toBytes(meta.name)),
+          keccak256(toBytes(meta.version)),
+          BigInt(chain.id),
+          nexusAccountAddress
+        ]
+      )
+    )
 
     const typedHashHashed = keccak256(
       concat(["0x1901", domainSeparator, message.contents])
@@ -346,7 +382,7 @@ describe("nexus.account", async () => {
 
     const finalSignature = encodePacked(
       ["address", "bytes"],
-      [TEST_ADDRESS_K1_VALIDATOR_ADDRESS, signatureData]
+      [nexusAccount.getModule().address, signatureData]
     )
 
     const contractResponse = await testClient.readContract({
@@ -361,14 +397,13 @@ describe("nexus.account", async () => {
     expect(contractResponse).toBe(eip1271MagicValue)
   })
 
-  test.skip("should sign using signTypedData SDK method", async () => {
+  test("should sign using signTypedData SDK method", async () => {
     const appDomain = {
       chainId: chain.id,
       name: "TokenWithPermit",
-      verifyingContract: testAddresses.TokenWithPermit,
+      verifyingContract: TOKEN_WITH_PERMIT as Address,
       version: "1"
     }
-
     const primaryType = "Contents"
     const types = {
       Contents: [
@@ -385,7 +420,7 @@ describe("nexus.account", async () => {
       )
     )
     const nonce = (await testClient.readContract({
-      address: testAddresses.TokenWithPermit,
+      address: TOKEN_WITH_PERMIT as Address,
       abi: TokenWithPermitAbi,
       functionName: "nonces",
       args: [nexusAccountAddress]
@@ -411,9 +446,7 @@ describe("nexus.account", async () => {
       )
     }
 
-    const appDomainSeparator = domainSeparator({
-      domain: appDomain
-    })
+    const appDomainSeparator = domainSeparator({ domain: appDomain })
 
     const contentsHash = keccak256(
       concat(["0x1901", appDomainSeparator, message.stuff])
@@ -436,7 +469,7 @@ describe("nexus.account", async () => {
     })
 
     const permitTokenResponse = await nexusClient.writeContract({
-      address: testAddresses.TokenWithPermit,
+      address: TOKEN_WITH_PERMIT as Address,
       abi: TokenWithPermitAbi,
       functionName: "permitWith1271",
       chain: network.chain,
@@ -452,7 +485,7 @@ describe("nexus.account", async () => {
     await nexusClient.waitForTransactionReceipt({ hash: permitTokenResponse })
 
     const allowance = await testClient.readContract({
-      address: testAddresses.TokenWithPermit,
+      address: TOKEN_WITH_PERMIT as Address,
       abi: TokenWithPermitAbi,
       functionName: "allowance",
       args: [nexusAccountAddress, nexusAccountAddress]
@@ -532,62 +565,4 @@ describe("nexus.account", async () => {
     expect(addressEquals(keyFromViem, keyFromEthers)).toBe(true)
     expect(addressEquals(keyWithHardcodedValues, keyFromEthers)).toBe(true)
   })
-
-  testnetTest(
-    "should verify biconomy attester address",
-    async ({ config: { bundlerUrl, chain, account } }) => {
-      const publicClient = await createPublicClient({
-        chain,
-        transport: http()
-      })
-      const biconomyAttesterAddress = (await publicClient.readContract({
-        address: MAINNET_ADDRESS_K1_VALIDATOR_FACTORY_ADDRESS,
-        abi: [
-          {
-            inputs: [
-              {
-                internalType: "address",
-                name: "eoaOwner",
-                type: "address"
-              },
-              {
-                internalType: "uint256",
-                name: "index",
-                type: "uint256"
-              },
-              {
-                internalType: "address[]",
-                name: "attesters",
-                type: "address[]"
-              },
-              {
-                internalType: "uint8",
-                name: "threshold",
-                type: "uint8"
-              }
-            ],
-            name: "computeAccountAddress",
-            outputs: [
-              {
-                internalType: "address payable",
-                name: "expectedAddress",
-                type: "address"
-              }
-            ],
-            stateMutability: "view",
-            type: "function"
-          }
-        ],
-        functionName: "computeAccountAddress",
-        args: [
-          "0x129443cA2a9Dec2020808a2868b38dDA457eaCC7",
-          0n,
-          ["0x000000333034E9f539ce08819E12c1b8Cb29084d"],
-          1
-        ]
-      })) as Address
-
-      expect(NEWTON_ATTESTER_ADDRESS).toBe(biconomyAttesterAddress)
-    }
-  )
 })

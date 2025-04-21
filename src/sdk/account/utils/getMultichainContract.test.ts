@@ -1,38 +1,35 @@
-import { type Address, parseEther } from "viem"
+import { type Address, erc20Abi, parseEther } from "viem"
 import { base, optimism } from "viem/chains"
 import { describe, expect, it } from "vitest"
 import { getMultichainContract } from "./getMultichainContract"
 
-// Sample ERC20 ABI (minimal version for testing)
-const erc20ABI = [
-  {
-    type: "function",
-    name: "transfer",
-    inputs: [
-      { name: "recipient", type: "address" },
-      { name: "amount", type: "uint256" }
-    ],
-    outputs: [{ type: "bool" }],
-    stateMutability: "nonpayable"
-  },
-  {
-    type: "function",
-    name: "balanceOf",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view"
-  }
-] as const
-
-describe("mee:getMultichainContract", () => {
+describe("mee.getMultichainContract", () => {
   const mockDeployments: [Address, number][] = [
     ["0x1234567890123456789012345678901234567890", optimism.id],
     ["0x0987654321098765432109876543210987654321", base.id]
   ]
 
   const mockContract = getMultichainContract({
-    abi: erc20ABI,
+    abi: erc20Abi,
     deployments: mockDeployments
+  })
+
+  it("should return an instruction", async () => {
+    mockContract.on(optimism.id).transfer({
+      args: ["0x1111111111111111111111111111111111111111", parseEther("1.0")]
+    })
+
+    const instruction = await mockContract.build({
+      type: "transfer",
+      data: {
+        chainId: optimism.id,
+        args: ["0x1111111111111111111111111111111111111111", parseEther("1.0")]
+      }
+    })
+
+    expect(instruction).toBeDefined()
+    expect(instruction.calls).toHaveLength(1)
+    expect(instruction.chainId).toBe(optimism.id)
   })
 
   it("should create a contract instance with correct deployments", () => {

@@ -1,20 +1,16 @@
-import { type Hex, http, type Chain } from "viem"
+import type { Chain, Hex, Transport } from "viem"
 import type { Instruction } from "../clients/decorators/mee/getQuote"
-import {
-  NEWTON_ATTESTER_ADDRESS,
-  NEWTON_TESTNET_ATTESTER_ADDRESS,
-  NEXUS_ACCOUNT_FACTORY,
-  MEE_VALIDATOR_ADDRESS
-} from "../constants"
 import type { ModularSmartAccount } from "../modules/utils/Types"
 import {
-  toNexusAccount,
-  type ToNexusSmartAccountParameters
+  type ToNexusSmartAccountParameters,
+  toNexusAccount
 } from "./toNexusAccount"
 import type { Signer } from "./utils/toSigner"
 
 import {
+  type BuildComposableInstructionTypes,
   type BuildInstructionTypes,
+  buildComposable as buildComposableDecorator,
   build as buildDecorator
 } from "./decorators/build"
 import {
@@ -27,11 +23,27 @@ import {
   getUnifiedERC20Balance as getUnifiedERC20BalanceDecorator
 } from "./decorators/getUnifiedERC20Balance"
 import {
+  type IsDelegatedParameters,
+  type IsDelegatedPayload,
+  isDelegated as isDelegatedDecorator
+} from "./decorators/isDelegated"
+import {
   type BridgeQueryResult,
   type QueryBridgeParams,
   queryBridge as queryBridgeDecorator
 } from "./decorators/queryBridge"
+import {
+  type UnDelegateParameters,
+  type UnDelegatePayload,
+  unDelegate as unDelegateDecorator
+} from "./decorators/unDelegate"
+import {
+  type WaitForTransactionReceiptParameters,
+  type WaitForTransactionReceiptPayload,
+  waitForTransactionReceipts as waitForTransactionReceiptsDecorator
+} from "./decorators/waitForTransactionReceipts"
 import type { MultichainToken } from "./utils/Types"
+
 /**
  * Parameters required to create a multichain Nexus account
  */
@@ -40,6 +52,8 @@ export type MultichainNexusParams = Partial<
 > & {
   /** Array of chains where the account will be deployed */
   chains: Chain[]
+  /** Transport to use for the Nexus Account */
+  transports: Transport[]
   /** The signer instance used for account creation */
   signer: ToNexusSmartAccountParameters["signer"]
 }
@@ -103,6 +117,22 @@ export type MultichainSmartAccount = BaseMultichainSmartAccount & {
     currentInstructions?: Instruction[]
   ) => Promise<Instruction[]>
   /**
+   * Function to build composable instructions
+   * @param params - The parameters for the composable instruction
+   * @returns Returns composable instructions
+   * @example
+   * const instructions = await mcAccount.build({
+   *   amount: BigInt(1000),
+   *   mcToken: mcUSDC,
+   *   toChain: base
+   * })
+   */
+  buildComposable: (
+    params: BuildComposableInstructionTypes,
+    currentInstructions?: Instruction[]
+  ) => Promise<Instruction[]>
+
+  /**
    * Function to build instructions for bridging a token across all deployments
    * @param params - The parameters for the balance requirement
    * @returns Instructions for any required bridging operations
@@ -128,6 +158,32 @@ export type MultichainSmartAccount = BaseMultichainSmartAccount & {
    * })
    */
   queryBridge: (params: QueryBridgeParams) => Promise<BridgeQueryResult | null>
+  /**
+   * Function to check if the account is delegated
+   * @returns True if the account is delegated, false otherwise
+   * @example
+   * const isDelegated = await mcAccount.isDelegated()
+   */
+  isDelegated: (
+    parameter?: IsDelegatedParameters
+  ) => Promise<IsDelegatedPayload>
+  /**
+   * Function to undelegate the account
+   * @returns The transaction hashes of the undelegate transactions
+   * @example
+   * const receipts = await mcAccount.unDelegate()
+   */
+  unDelegate: (parameters?: UnDelegateParameters) => Promise<UnDelegatePayload>
+  /**
+   * Function to wait for transaction receipts
+   * @param hashes - The transaction hashes to wait for
+   * @returns The transaction receipts
+   * @example
+   * const receipts = await mcAccount.waitForTransactionReceipts([hash1, hash2])
+   */
+  waitForTransactionReceipts: (
+    parameters: WaitForTransactionReceiptParameters
+  ) => Promise<WaitForTransactionReceiptPayload>
 }
 
 /**
@@ -144,7 +200,8 @@ export type MultichainSmartAccount = BaseMultichainSmartAccount & {
  * @example
  * const account = await toMultichainNexusAccount({
  *   signer: mySigner,
- *   chains: [optimism, base]
+ *   chains: [optimism, base],
+ *   transports: [http(), http()]
  * });
  *
  * // Get deployment on specific chain
@@ -163,17 +220,29 @@ export type MultichainSmartAccount = BaseMultichainSmartAccount & {
 export async function toMultichainNexusAccount(
   multiChainNexusParams: MultichainNexusParams
 ): Promise<MultichainSmartAccount> {
-  const { chains, signer, ...accountParameters } = multiChainNexusParams
+  const {
+    chains,
+    signer: unresolvedSigner,
+    transports,
+    ...accountParameters
+  } = multiChainNexusParams
+
+  if (chains.length === 0) {
+    throw new Error("No chains provided")
+  }
+
+  if (transports && transports.length !== chains.length) {
+    throw new Error(
+      "The number of transports must match the number of chains provided"
+    )
+  }
 
   const deployments = await Promise.all(
-    chains.map((chain) =>
+    chains.map((chain, i) =>
       toNexusAccount({
         chain,
-        signer,
-        transport: http(),
-        validatorAddress: MEE_VALIDATOR_ADDRESS,
-        factoryAddress: NEXUS_ACCOUNT_FACTORY,
-        attesters: [chain.testnet ? NEWTON_TESTNET_ATTESTER_ADDRESS : NEWTON_ATTESTER_ADDRESS],
+        signer: unresolvedSigner,
+        transport: transports[i],
         ...accountParameters
       })
     )
@@ -186,11 +255,9 @@ export async function toMultichainNexusAccount(
     const deployment = deployments.find(
       (dep) => dep.client.chain?.id === chainId
     )
-
     if (!deployment && strictMode) {
       throw new Error(`Deployment not found for chainId: ${chainId}`)
     }
-
     return deployment
   }
 
@@ -200,8 +267,8 @@ export async function toMultichainNexusAccount(
   }
 
   const baseAccount = {
+    signer: deployments[0].signer, // This signer is resolved
     deployments,
-    signer,
     deploymentOn,
     addressOn
   } as BaseMultichainSmartAccount
@@ -215,6 +282,15 @@ export async function toMultichainNexusAccount(
   ): Promise<Instruction[]> =>
     buildDecorator({ currentInstructions, account: baseAccount }, params)
 
+  const buildComposable = (
+    params: BuildComposableInstructionTypes,
+    currentInstructions?: Instruction[]
+  ): Promise<Instruction[]> =>
+    buildComposableDecorator(
+      { currentInstructions, account: baseAccount },
+      params
+    )
+
   const buildBridgeInstructions = (
     params: Omit<MultichainBridgingParams, "account">
   ) => buildBridgeInstructionsDecorator({ ...params, account: baseAccount })
@@ -222,11 +298,24 @@ export async function toMultichainNexusAccount(
   const queryBridge = (params: QueryBridgeParams) =>
     queryBridgeDecorator({ ...params, account: baseAccount })
 
+  const isDelegated = (parameters?: IsDelegatedParameters) =>
+    isDelegatedDecorator({ ...parameters, account: baseAccount })
+  const unDelegate = (parameters?: UnDelegateParameters) =>
+    unDelegateDecorator({ ...parameters, account: baseAccount })
+  const waitForTransactionReceipts = (
+    parameters: WaitForTransactionReceiptParameters
+  ) =>
+    waitForTransactionReceiptsDecorator({ ...parameters, account: baseAccount })
+
   return {
     ...baseAccount,
     getUnifiedERC20Balance,
     build,
+    buildComposable,
     buildBridgeInstructions,
-    queryBridge
+    queryBridge,
+    isDelegated,
+    unDelegate,
+    waitForTransactionReceipts
   }
 }

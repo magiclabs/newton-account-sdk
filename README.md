@@ -1,4 +1,8 @@
-[![Biconomy](https://img.shields.io/badge/Made_with_%F0%9F%8D%8A_by-Biconomy-ff4e17?style=flat)](https://biconomy.io) [![License MIT](https://img.shields.io/badge/License-MIT-blue?&style=flat)](./LICENSE) [![codecov](https://codecov.io/github/bcnmy/abstractjs/graph/badge.svg?token=DTdIR5aBDA)](https://codecov.io/github/bcnmy/abstractjs)[![install size](https://packagephobia.com/badge?p=@biconomy/abstractjs)](https://packagephobia.com/result?p=@biconomy/abstractjs)
+[![Biconomy](https://img.shields.io/badge/Made_with_%F0%9F%8D%8A_by-Biconomy-ff4e17?style=flat)](https://biconomy.io)
+[![Build](https://github.com/bcnmy/abstractjs/actions/workflows/build.yml/badge.svg)](https://github.com/bcnmy/abstractjs/actions)
+[![License MIT](https://img.shields.io/badge/License-MIT-blue?&style=flat)](./LICENSE) 
+[![codecov](https://codecov.io/github/bcnmy/abstractjs/graph/badge.svg?token=DTdIR5aBDA)](https://codecov.io/github/bcnmy/abstractjs) 
+[![install size](https://packagephobia.com/badge?p=@biconomy/abstractjs)](https://packagephobia.com/result?p=@biconomy/abstractjs)
 
 # abstractjs 🚀
 
@@ -12,14 +16,12 @@ The Biconomy SDK is your all-in-one toolkit for building decentralized applicati
 
   - [📚 Table of Contents](#-table-of-contents)
   - [🛠️ Quickstart](#-quickstart)
-
-    - [Prerequisites](#prerequisites)
     - [Installation](#installation)
-
+    - [Testing](#testing)
   - [📄 Documentation and Resources](#-documentation-and-resources)
   - [💼 Examples](#-examples)
   - [License](#license)
-  - [Connect with Biconomy 🍊](#connect-with-biconomy-🍊)
+  - [Connect with Biconomy 🍊](#connect-with-biconomy-)
 
 ## 🛠️ Quickstart
 
@@ -35,23 +37,24 @@ bun add @biconomy/abstractjs viem @rhinestone/module-sdk
 import { toMultichainNexusAccount, mcUSDC } from "@biconomy/abstractjs";
 import { base, optimism } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
-
+import { http } from "viem";
 const eoaAccount = privateKeyToAccount(`0x${process.env.PRIVATE_KEY}`)
 const mcNexus = await toMultichainNexusAccount({
   chains: [base, optimism],
+  transports: [http(), http()],
   signer: eoaAccount
 })
-const meeClient = createMeeClient({ account: mcNexus })
+const meeClient = await createMeeClient({ account: mcNexus })
 
 const quote = await meeClient.getQuote({
   instructions: [{
     calls: [{ to: "0x...", value: 1n, gasLimit: 100000n }],
     chainId: base.id
   }],
-  feeToken: toFeeToken({
-    mcToken: mcUSDC,
+  feeToken: {
+    address: mcUSDC.addressOn(base.id),
     chainId: base.id
-  })
+  }
 })
 
 // Execute the quote and get back a transaction hash
@@ -75,7 +78,7 @@ bun install --frozen-lockfile
 **Funding test accounts:**
 
 ```bash
-# Fund test PRIVATE_KEY account with native tokens and USDC
+# Fund test nexus accounts with native tokens and USDC, using a funded PRIVATE_KEY master account
 bun run fund:nexus
 ```
 
@@ -84,20 +87,19 @@ bun run fund:nexus
 # Run all tests
 bun run test
 
-# Run tests for a specific subset of tests (by test description)
-bun run test -t=mee
-
+# Run tests in watch mode for a specific subset of tests (by test description)
+bun run test:watch -t=mee
 ```
 
 For detailed information about the testing framework, network configurations, and debugging guidelines, please refer to our [Testing Documentation](./src/test/README.md).
 
-## Documentation and Resources
+## 📄 Documentation and Resources
 
 For a comprehensive understanding of our project and to contribute effectively, please refer to the following resources:
 
 - [**Biconomy Documentation**](https://docs.biconomy.io)
 - [**Biconomy Dashboard**](https://dashboard.biconomy.io)
-- [**API Documentation**](https://bcnmy.github.io/sdk)
+- [**API Documentation**](https://bcnmy.github.io/abstractjs)
 - [**Contributing Guidelines**](./CONTRIBUTING.md): Learn how to contribute to our project, from code contributions to documentation improvements.
 - [**Code of Conduct**](./CODE_OF_CONDUCT.md): Our commitment to fostering an open and welcoming environment.
 - [**Security Policy**](./SECURITY.md): Guidelines for reporting security vulnerabilities.

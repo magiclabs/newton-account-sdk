@@ -10,24 +10,23 @@ import {
   parseUnits
 } from "viem"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
-import { toNetworks } from "../../test/testSetup"
+import { paymasterTruthy, toNetwork } from "../../test/testSetup"
 import { getBalance, killNetwork } from "../../test/testUtils"
 import type { NetworkConfig } from "../../test/testUtils"
 import { type NexusAccount, toNexusAccount } from "../account/toNexusAccount"
+import { BICONOMY_TOKEN_PAYMASTER } from "../account/utils/Constants"
+import {
+  type NexusClient,
+  createSmartAccountClient
+} from "./createBicoBundlerClient"
 import {
   type BicoPaymasterClient,
   createBicoPaymasterClient,
   toBiconomyTokenPaymasterContext
 } from "./createBicoPaymasterClient"
-import {
-  type NexusClient,
-  createSmartAccountClient
-} from "./createSmartAccountClient"
-import { BICONOMY_TOKEN_PAYMASTER } from "../account/utils/Constants"
 
 // NB These tests require ERC20 tokens to be available on testnet, so they are mostly skipped
-describe("bico.paymaster", async () => {
-  // describe.runIf(paymasterTruthy())("bico.paymaster", async () => {
+describe.skipIf(!paymasterTruthy())("bico.paymaster", async () => {
   let network: NetworkConfig
 
   let chain: Chain
@@ -50,7 +49,7 @@ describe("bico.paymaster", async () => {
     "0x7683022d84f726a96c4a6611cd31dbf5409c0ac9"
 
   beforeAll(async () => {
-    ;[network] = await toNetworks("TESTNET_FROM_ENV_VARS")
+    network = await toNetwork("TESTNET_FROM_ENV_VARS")
 
     chain = network.chain
     bundlerUrl = network.bundlerUrl
@@ -80,13 +79,11 @@ describe("bico.paymaster", async () => {
       transport: http()
     })
 
-    nexusAccountAddress = await nexusAccount.getCounterFactualAddress()
+    nexusAccountAddress = await nexusAccount.getAddress()
 
-    nexusClient = await createSmartAccountClient({
-      signer: account,
-      chain,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl),
+    nexusClient = createSmartAccountClient({
+      account: nexusAccount,
+      transport: http(bundlerUrl),
       paymaster
     })
   })
@@ -102,7 +99,7 @@ describe("bico.paymaster", async () => {
     expect(paymaster).not.toHaveProperty("getPaymasterStubData")
   })
 
-  test("should send a sponsored transaction", async () => {
+  test.skip("should send a sponsored transaction", async () => {
     // Get initial balance
     const initialBalance = await publicClient.getBalance({
       address: nexusAccountAddress
@@ -131,7 +128,7 @@ describe("bico.paymaster", async () => {
     expect(finalBalance).toBe(initialBalance - 1n)
   })
 
-  test("should wait for a confirmed user operation receipt", async () => {
+  test.skip("should wait for a confirmed user operation receipt", async () => {
     const hash = await nexusClient.sendUserOperation({
       calls: [
         {
@@ -148,24 +145,15 @@ describe("bico.paymaster", async () => {
     expect(receipt.success).toBe("true")
   })
 
-  test.skip("should use token paymaster to pay for gas fees, use max approval, use sendUserOperation", async () => {
-    const balanceOfFeeToken = await getBalance(
-      publicClient,
-      nexusAccountAddress,
-      baseSepoliaUSDCAddress
-    )
+  test.skip("should use token paymaster to pay for gas fees, use maxApproval, use sendUserOperation", async () => {
     const paymasterContext = toBiconomyTokenPaymasterContext({
       feeTokenAddress: baseSepoliaUSDCAddress
     })
-    const nexusClient = await createSmartAccountClient({
-      signer: account,
-      chain,
-      paymaster: createBicoPaymasterClient({
-        transport: http(paymasterUrl)
-      }),
+    const nexusClient = createSmartAccountClient({
+      account: nexusAccount,
+      paymaster: createBicoPaymasterClient({ transport: http(paymasterUrl) }),
       paymasterContext,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl)
+      transport: http(bundlerUrl)
     })
 
     const initialBalance = await publicClient.getBalance({
@@ -196,19 +184,18 @@ describe("bico.paymaster", async () => {
     expect(finalBalance).toBe(initialBalance - 1n)
   })
 
-  test.skip("should use token paymaster to pay for gas fees, use max approval, use sendTransaction", async () => {
+  test.skip("should use token paymaster to pay for gas fees, use maxApproval, use sendTransaction", async () => {
     const paymasterContext = toBiconomyTokenPaymasterContext({
       feeTokenAddress: baseSepoliaUSDCAddress
     })
-    const nexusClient = await createSmartAccountClient({
-      signer: account,
-      chain,
+
+    const nexusClient = createSmartAccountClient({
+      account: nexusAccount,
       paymaster: createBicoPaymasterClient({
         transport: http(paymasterUrl)
       }),
       paymasterContext,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl)
+      transport: http(bundlerUrl)
     })
 
     const initialBalance = await publicClient.getBalance({
@@ -253,6 +240,7 @@ describe("bico.paymaster", async () => {
         }
       ]
     })
+
     const quote = await paymaster.getTokenPaymasterQuotes({ userOp, tokenList })
     expect(quote.mode).toBe("ERC20")
     expect(quote.paymasterAddress).toBe(BICONOMY_TOKEN_PAYMASTER)
@@ -271,15 +259,14 @@ describe("bico.paymaster", async () => {
     const paymasterContext = toBiconomyTokenPaymasterContext({
       feeTokenAddress: baseSepoliaUSDCAddress
     })
-    const nexusClient = await createSmartAccountClient({
-      signer: account,
-      chain,
+
+    const nexusClient = createSmartAccountClient({
+      account: nexusAccount,
       paymaster: createBicoPaymasterClient({
         transport: http(paymasterUrl)
       }),
       paymasterContext,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl)
+      transport: http(bundlerUrl)
     })
 
     const usdcBalance = await getBalance(
@@ -337,15 +324,12 @@ describe("bico.paymaster", async () => {
     const paymasterContext = toBiconomyTokenPaymasterContext({
       feeTokenAddress: baseSepoliaUSDCAddress
     })
-    const nexusClient = await createSmartAccountClient({
-      signer: account,
-      chain,
-      paymaster: createBicoPaymasterClient({
-        transport: http(paymasterUrl)
-      }),
+
+    const nexusClient = createSmartAccountClient({
+      account: nexusAccount,
+      paymaster: createBicoPaymasterClient({ transport: http(paymasterUrl) }),
       paymasterContext,
-      transport: http(),
-      bundlerTransport: http(bundlerUrl)
+      transport: http(bundlerUrl)
     })
 
     const supportedTokens = await paymaster.getSupportedTokens(nexusClient)

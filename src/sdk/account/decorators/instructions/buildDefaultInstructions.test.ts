@@ -1,57 +1,54 @@
-import type { Chain, LocalAccount } from "viem"
+import type { Chain, LocalAccount, Transport } from "viem"
 import { beforeAll, describe, expect, it } from "vitest"
-import { getTestChains, toNetwork } from "../../../../test/testSetup"
+import { getTestChainConfig, toNetwork } from "../../../../test/testSetup"
 import type { NetworkConfig } from "../../../../test/testUtils"
 import {
   type MeeClient,
   createMeeClient
 } from "../../../clients/createMeeClient"
+import type { Instruction } from "../../../clients/decorators/mee/getQuote"
 import {
   type MultichainSmartAccount,
   toMultichainNexusAccount
 } from "../../toMultiChainNexusAccount"
 import buildDefaultInstructions from "./buildDefaultInstructions"
 
-describe("mee:buildDefaultInstructions", () => {
+describe("mee.buildDefaultInstructions", () => {
   let network: NetworkConfig
   let eoaAccount: LocalAccount
 
   let mcNexus: MultichainSmartAccount
   let meeClient: MeeClient
 
-  let targetChain: Chain
   let paymentChain: Chain
+  let targetChain: Chain
+  let transports: Transport[]
 
   beforeAll(async () => {
     network = await toNetwork("MAINNET_FROM_ENV_VARS")
-    ;[paymentChain, targetChain] = getTestChains(network)
+    ;[[paymentChain, targetChain], transports] = getTestChainConfig(network)
 
     eoaAccount = network.account!
 
     mcNexus = await toMultichainNexusAccount({
       chains: [paymentChain, targetChain],
+      transports,
       signer: eoaAccount
     })
 
-    meeClient = createMeeClient({ account: mcNexus })
+    meeClient = await createMeeClient({ account: mcNexus })
   })
 
-  it("should call the bridge with a unified balance", async () => {
-    const instructions = await buildDefaultInstructions(
+  it("should highlight building default instructions", async () => {
+    const instructions: Instruction[] = await buildDefaultInstructions(
+      { account: mcNexus },
       {
-        account: mcNexus
-      },
-      {
-        instructions: [
+        chainId: targetChain.id,
+        calls: [
           {
-            chainId: targetChain.id,
-            calls: [
-              {
-                to: "0x0000000000000000000000000000000000000000",
-                gasLimit: 50000n,
-                value: 0n
-              }
-            ]
+            to: "0x0000000000000000000000000000000000000000",
+            gasLimit: 50000n,
+            value: 0n
           }
         ]
       }

@@ -37,13 +37,13 @@ const CUSTOM_CHAINS: Chain[] = [
 export const getChain = (chainId: number): Chain => {
   const allChains = [...Object.values(chains), ...CUSTOM_CHAINS]
   for (const chain of allChains) {
-    if (chain.id === chainId) {
+    if (Number(chain.id) === Number(chainId)) {
       return chain
     }
   }
 
   throw new Error(
-    "Chain not found. Please add a customChain into your config using the getCustomChain(...) helper"
+    `Chain ${chainId} not found. Please add a customChain into your config using the getCustomChain(...) helper`
   )
 }
 
@@ -82,10 +82,14 @@ type StringOrStrings = string | string[]
  *   transport: http()
  * })
  *
- * const smartAccountCustomChain = await createSmartAccountClient({
- *   signer: walletClientWithCustomChain,
- *   bundlerUrl,
- *   customChain
+ * const smartAccountCustomChain = createSmartAccountClient({
+ *   account: await toNexusAccount({
+ *     chain: customChain,
+ *     signer: walletClientWithCustomChain,
+ *     transport: http(),
+ *     mock: true
+ *   }),
+ *   transport: http(bundlerUrl),
  * })
  *
  * const { wait } = await smartAccountCustomChain.sendUserOperation({
