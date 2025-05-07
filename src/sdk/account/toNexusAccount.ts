@@ -132,7 +132,7 @@ export type ToNexusSmartAccountParameters = {
   /** Optional number of attesters required to approve module instalation */
   threshold?: number
   /** Optional validator modules configuration */
-  validators?: Array<Validator>
+  validators?: Array<GenericModuleConfig>
   /** Optional executor modules configuration */
   executors?: Array<GenericModuleConfig>
   /** Optional prevalidation hook modules configuration */
@@ -301,7 +301,7 @@ export const toNexusAccount = async (
   const validators = customValidators || []
 
   // The default validator should be the defaultValidator unless custom validators have been set
-  let module = customValidators?.[0] || defaultValidator
+  let module = defaultValidator
 
   // Prepare executor modules
   const executors = customExecutors || []
